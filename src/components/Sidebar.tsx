@@ -1,15 +1,28 @@
 import { useState } from 'react';
 import { useStore } from '../store';
 import { TEMPLATES } from '../data/fixtures';
+import { buildSchema } from '../model/toSchema';
 import { download, readFile } from './common';
 
 export function Sidebar() {
-  const { projects, activeId, select, createProject, duplicateProject, renameProject, deleteProject, loadTemplate, exportAll, importAll, setUI } = useStore();
+  const { projects, activeId, select, createProject, duplicateProject, renameProject, deleteProject, loadTemplate, exportAll, importAll, setUI, toast } = useStore();
   const [editing, setEditing] = useState<string | null>(null);
+
+  const downloadAllSchemas = () => {
+    if (!projects.length) return;
+    projects.forEach((p, i) => {
+      const { schema } = buildSchema(p);
+      if (schema) {
+        setTimeout(() => download(`${p.title || p.name}.schema.json`, JSON.stringify(schema, null, 2)), i * 120);
+      }
+    });
+    toast(`Downloading ${projects.length} Draft-04 schema file(s)`);
+  };
+
   return (
     <aside className="panel w-56 shrink-0" aria-label="Projects">
       <div className="panel-head">
-        <h2 className="mr-auto text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400">Projects</h2>
+        <h2 className="mr-auto text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400">Projects ({projects.length})</h2>
         <button className="btn btn-primary" onClick={() => createProject()}>＋ New</button>
       </div>
       <ul className="min-h-0 flex-1 overflow-auto p-1.5">
@@ -35,6 +48,11 @@ export function Sidebar() {
         <div className="label">Templates</div>
         {TEMPLATES.map((t) => <button key={t.id} className="btn w-full justify-start truncate" onClick={() => loadTemplate(t.id)}>{t.name}</button>)}
         <button className="btn w-full" onClick={() => setUI({ modal: 'import' })}>Import schema…</button>
+        {projects.length > 0 && (
+          <button className="btn w-full" onClick={downloadAllSchemas} title="Download each project's Draft-04 .schema.json">
+            ⬇ Download all .json ({projects.length})
+          </button>
+        )}
         <div className="flex gap-1">
           <button className="btn flex-1" onClick={() => download('schemaforge-projects.json', exportAll())}>Export all</button>
           <button className="btn flex-1" onClick={() => readFile('.json,application/json', (t) => importAll(t))}>Import all</button>

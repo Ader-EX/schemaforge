@@ -1,6 +1,6 @@
-import { createContext, useContext, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Field, FIELD_TYPES, FieldType, newField } from '../../model/types';
-import { childList, findField } from '../../model/tree';
+import { childList, findField, walkFields } from '../../model/tree';
 import { applyPatch, fieldToPatch } from '../../model/presets';
 import { uid } from '../../model/types';
 import { useStore } from '../../store';
@@ -13,6 +13,8 @@ interface Dnd {
   setDragId: (s: string | null) => void;
   hint: { id: string; pos: 'before' | 'after' | 'inside' } | null;
   setHint: (h: Dnd['hint']) => void;
+  collapseTick: { n: number; collapsed: boolean };
+  visibleIds: Set<string> | null;
 }
 const DndCtx = createContext<Dnd>(null as any);
 
@@ -46,10 +48,18 @@ function FieldRow({ f, depth }: { f: Field; depth: number }) {
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const rowRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (dnd.collapseTick.n > 0) setCollapsed(dnd.collapseTick.collapsed);
+  }, [dnd.collapseTick]);
+
   const upd = (fn: (f: Field) => void) => editRoot((r) => { const h = findField(r, f.id); if (h) fn(h.field); });
   const list = childList(f);
   const hint = dnd.hint?.id === f.id ? dnd.hint.pos : null;
-  const nameClash = false;
+  const isFiltered = dnd.visibleIds !== null;
+  const effectiveCollapsed = isFiltered ? false : collapsed;
+
+  if (dnd.visibleIds && !dnd.visibleIds.has(f.id)) return null;
 
   const over = (e: React.DragEvent) => {
     if (!dnd.dragId || dnd.dragId === f.id) return;
@@ -66,6 +76,8 @@ function FieldRow({ f, depth }: { f: Field; depth: number }) {
     dnd.setDragId(null);
     dnd.setHint(null);
   };
+
+  const reqSubCount = list ? list.filter((c) => c.required).length : 0;
 
   return (
     <div className="relative" onDragOver={over} onDrop={drop}>
@@ -88,10 +100,15 @@ function FieldRow({ f, depth }: { f: Field; depth: number }) {
             }}
           >⠿</span>
           {list ? (
-            <button className="btn btn-ghost px-1" aria-label={collapsed ? 'Expand' : 'Collapse'} aria-expanded={!collapsed} onClick={() => setCollapsed(!collapsed)}>{collapsed ? '▸' : '▾'}</button>
+            <button className="btn btn-ghost px-1" aria-label={effectiveCollapsed ? 'Expand' : 'Collapse'} aria-expanded={!effectiveCollapsed} onClick={() => setCollapsed(!collapsed)}>{effectiveCollapsed ? '▸' : '▾'}</button>
           ) : <span className="w-5" />}
-          <input className={`input min-w-0 flex-1 font-mono ${nameClash ? 'border-red-500' : ''}`} aria-label="Field name" value={f.name} onChange={(e) => upd((x) => { x.name = e.target.value; })} />
+          <input className="input min-w-0 flex-1 font-mono" aria-label="Field name" value={f.name} onChange={(e) => upd((x) => { x.name = e.target.value; })} />
           {f.required && <span className="font-bold text-red-600 dark:text-red-400" title="required" aria-label="required">*</span>}
+          {list && (
+            <span className="chip shrink-0 bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300" title="Child fields">
+              {list.length} {list.length === 1 ? 'field' : 'fields'}{reqSubCount ? ` · ${reqSubCount} req` : ''}
+            </span>
+          )}
           <select className="input w-24 shrink-0" aria-label={`Type of ${f.name}`} value={f.type} onChange={(e) => upd((x) => changeType(x, e.target.value as FieldType))}>
             {FIELD_TYPES.map((t) => <option key={t}>{t}</option>)}
           </select>
@@ -101,7 +118,7 @@ function FieldRow({ f, depth }: { f: Field; depth: number }) {
           <Check label="nullable" checked={f.nullable} onChange={(v) => upd((x) => { x.nullable = v; })} />
           <button className={`btn ${open ? 'btn-primary' : ''}`} aria-expanded={open} onClick={() => setOpen(!open)}>⚙ Rules</button>
           <button className="btn btn-ghost" title="Duplicate" aria-label={`Duplicate ${f.name}`} onClick={() => dup(f.id)}>⧉</button>
-          <button className="btn btn-ghost" title="Save as custom preset" aria-label={`Save ${f.name} as preset`} onClick={() => {
+          <button className="btn btn-ghost" title="Save field or block as reusable preset" aria-label={`Save ${f.name} as preset`} onClick={() => {
             const name = window.prompt('Preset name', f.name);
             if (name) { addCustom({ id: uid(), name, description: f.description, patch: fieldToPatch(f) }); toast(`Saved preset "${name}"`); }
           }}>☆</button>
@@ -112,7 +129,7 @@ function FieldRow({ f, depth }: { f: Field; depth: number }) {
         {open && <div className="mt-1"><RulesEditor f={f} upd={upd} /></div>}
       </div>
       {hint === 'after' && <div className="absolute -bottom-0.5 left-0 right-0 h-0.5 bg-indigo-500" />}
-      {list && !collapsed && (
+      {list && !effectiveCollapsed && (
         <div className="ml-3 mt-1 space-y-1 border-l-2 border-slate-200 pl-2 dark:border-slate-700">
           {f.type === 'array' && <div className="text-[11px] text-slate-500">items (object)</div>}
           <FieldList list={list} depth={depth + 1} parentId={f.id} />
@@ -145,9 +162,73 @@ function FieldList({ list, depth, parentId }: { list: Field[]; depth: number; pa
 export function FieldTree({ root }: { root: Field }) {
   const [dragId, setDragId] = useState<string | null>(null);
   const [hint, setHint] = useState<Dnd['hint']>(null);
+  const [search, setSearch] = useState('');
+  const [reqOnly, setReqOnly] = useState(false);
+  const [collapseTick, setCollapseTick] = useState<{ n: number; collapsed: boolean }>({ n: 0, collapsed: false });
+
+  const stats = useMemo(() => {
+    let total = 0, req = 0, objects = 0;
+    walkFields(root, (f) => {
+      if (f.id === root.id || f.name === '') return;
+      total++;
+      if (f.required) req++;
+      if (childList(f)) objects++;
+    });
+    return { total, req, objects };
+  }, [root]);
+
+  const visibleIds = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q && !reqOnly) return null;
+    const set = new Set<string>();
+    const visit = (f: Field, path: string): boolean => {
+      const p = f.name ? (path ? `${path}.${f.name}` : f.name) : path;
+      const selfMatch =
+        f.id !== root.id &&
+        f.name !== '' &&
+        (!reqOnly || f.required) &&
+        (!q || p.toLowerCase().includes(q) || f.description.toLowerCase().includes(q) || (f.rules.pattern ?? '').toLowerCase().includes(q));
+      let childMatch = false;
+      for (const c of f.children) if (visit(c, p)) childMatch = true;
+      if (f.items && visit(f.items, `${p}[]`)) childMatch = true;
+      if (selfMatch || childMatch) {
+        set.add(f.id);
+        return true;
+      }
+      return false;
+    };
+    visit(root, '');
+    return set;
+  }, [root, search, reqOnly]);
+
   return (
-    <DndCtx.Provider value={{ dragId, setDragId, hint, setHint }}>
-      <div className="space-y-1" onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setHint(null); }}>
+    <DndCtx.Provider value={{ dragId, setDragId, hint, setHint, collapseTick, visibleIds }}>
+      <div className="space-y-2" onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setHint(null); }}>
+        {stats.total > 3 && (
+          <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 p-1.5 dark:border-slate-700 dark:bg-slate-800/60">
+            <input
+              className="input min-w-[140px] flex-1"
+              placeholder={`Search ${stats.total} fields (${stats.req} req)…`}
+              aria-label="Search fields"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            {search && <button className="btn btn-ghost px-1.5" onClick={() => setSearch('')} title="Clear search">✕</button>}
+            <button className={`btn ${reqOnly ? 'btn-primary' : ''}`} onClick={() => setReqOnly(!reqOnly)} title="Show required fields only">
+              * Req ({stats.req})
+            </button>
+            {stats.objects > 0 && (
+              <>
+                <button className="btn" onClick={() => setCollapseTick((t) => ({ n: t.n + 1, collapsed: true }))} title="Collapse all nested blocks">
+                  Collapse all
+                </button>
+                <button className="btn" onClick={() => setCollapseTick((t) => ({ n: t.n + 1, collapsed: false }))} title="Expand all nested blocks">
+                  Expand all
+                </button>
+              </>
+            )}
+          </div>
+        )}
         <FieldList list={root.children} depth={0} parentId={root.id} />
       </div>
     </DndCtx.Provider>

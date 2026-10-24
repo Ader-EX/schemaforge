@@ -8,7 +8,7 @@ import { CustomPreset } from './model/presets';
 import { TEMPLATES } from './data/fixtures';
 
 type Snap = Pick<Project, 'root' | 'title' | 'raw' | 'rawReason'>;
-export type Modal = null | 'about' | 'deploy' | 'diff' | 'presets' | 'import';
+export type Modal = null | 'about' | 'deploy' | 'diff' | 'presets' | 'import' | 'howto';
 export type RightTab = 'lint' | 'test' | 'gen';
 export type LeftTab = 'visual' | 'sample' | 'spec';
 export interface Toast { id: string; msg: string; kind: 'ok' | 'err' | 'info' }

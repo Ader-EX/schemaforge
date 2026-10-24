@@ -6,7 +6,7 @@ import { OutputPanel } from './components/OutputPanel';
 import { LintPanel } from './components/right/LintPanel';
 import { TestPanel } from './components/right/TestPanel';
 import { GeneratorPanel } from './components/right/GeneratorPanel';
-import { AboutModal, DeployModal, DiffModal, ImportModal, PresetsModal } from './components/Modals';
+import { AboutModal, DeployModal, DiffModal, HowToModal, ImportModal, PresetsModal } from './components/Modals';
 import { TEMPLATES } from './data/fixtures';
 import { useSchema } from './hooks';
 import { lintSchema, summarize } from './lint/lint';
@@ -61,6 +61,7 @@ function EmptyState() {
           <button className="btn" onClick={() => loadTemplate(TEMPLATES[1].id)}>Load AcctBindingInq</button>
           <button className="btn" onClick={() => createProject()}>New empty project</button>
           <button className="btn" onClick={() => setUI({ modal: 'import' })}>Import schema</button>
+          <button className="btn" onClick={() => setUI({ modal: 'howto' })}>📖 How-To Guide</button>
         </div>
       </div>
     </div>
@@ -106,6 +107,7 @@ export default function App() {
           <button className="btn" disabled={!p} onClick={st.saveVersion} title="Save version (Ctrl+S)">💾 Save</button>
           <button className="btn" disabled={!p} onClick={() => st.setUI({ modal: 'diff' })}>Diff</button>
           <button className="btn" onClick={() => st.setUI({ modal: 'presets' })}>Presets</button>
+          <button className="btn btn-primary" onClick={() => st.setUI({ modal: 'howto' })}>📖 How-To</button>
           <button className="btn" onClick={() => st.setUI({ modal: 'deploy' })}>Deploy notes</button>
           <button className="btn" onClick={() => st.setUI({ modal: 'about' })}>About</button>
           <button className="btn" aria-label="Toggle dark / light mode" onClick={() => st.setUI({ theme: st.theme === 'dark' ? 'light' : 'dark' })}>{st.theme === 'dark' ? '☀ Light' : '🌙 Dark'}</button>
@@ -123,6 +125,7 @@ export default function App() {
           <main className="panel flex-1"><EmptyState /></main>
         )}
       </div>
+      {st.modal === 'howto' && <HowToModal />}
       {st.modal === 'about' && <AboutModal />}
       {st.modal === 'deploy' && <DeployModal />}
       {st.modal === 'import' && <ImportModal />}

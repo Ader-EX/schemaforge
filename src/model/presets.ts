@@ -178,6 +178,52 @@ export const BUILTIN_PRESETS: Preset[] = [
       ],
     }),
   }),
+  P({
+    id: 'finSvcHeaderInfo', name: 'Financial header block (finSvcHeaderInfo)', group: 'Blocks', fieldName: 'finSvcHeaderInfo',
+    description: 'Standard RMLOG financial service header block shared across SKN, RTGS, SWIFT and fund transfers.',
+    valid: [{ tellerId: 'TL01', controlUnit: 'CU1', journalSeqNum: '123456789', glReconNumber: 'GL1', agentCode: 'SKN' }],
+    invalid: [{}, { tellerId: 'TL01', controlUnit: 'CU1', journalSeqNum: 'ABC', glReconNumber: 'GL1', agentCode: 'SKN' }],
+    build: () => ({
+      type: 'object',
+      description: 'Financial service header info (RMLOG)',
+      rules: {},
+      children: [
+        newField({ name: 'chequeNo', type: 'string', rules: { maxLength: 15 }, description: 'Cheque number' }),
+        newField({ name: 'tellerId', type: 'string', required: true, rules: { minLength: 1, maxLength: 10 }, description: 'Teller ID (Required)' }),
+        newField({ name: 'controlUnit', type: 'string', required: true, rules: { minLength: 1, maxLength: 7 }, description: 'Control unit (Required)' }),
+        newField({ name: 'supervisorOverrideID', type: 'string', rules: { maxLength: 10 }, description: 'Supervisor override ID' }),
+        newField({ name: 'rebidRequest', type: 'integer', rules: { maximum: 999 }, description: 'Rebid request, length: 3' }),
+        newField({ name: 'journalSeqNum', type: 'string', required: true, rules: { pattern: numericPattern(9), minLength: 1, maxLength: 9 }, description: '(Numeric Only) Journal sequence number, length: 9 (Required)' }),
+        newField({ name: 'forwardedItem', type: 'string', rules: { maxLength: 1 }, description: 'Forwarded item flag, length: 1' }),
+        newField({ name: 'correction', type: 'string', rules: { maxLength: 1 }, description: 'Error correction flag, length: 1' }),
+        newField({ name: 'overrideRequest', type: 'string', rules: { maxLength: 1 }, description: 'Override request (T/S), length: 1' }),
+        newField({ name: 'glReconNumber', type: 'string', required: true, rules: { minLength: 1, maxLength: 20 }, description: 'GL reconciliation number, length: 20 (Required)' }),
+        newField({ name: 'originalJournalSeqNum', type: 'string', rules: { pattern: numericPattern(9), maxLength: 9 }, description: '(Numeric Only) Original journal sequence number, length: 9' }),
+        newField({ name: 'tellerBranch', type: 'string', rules: { pattern: numericPattern(5), maxLength: 5 }, description: '(Numeric Only) Teller branch, length: 5' }),
+        newField({ name: 'releaseAcctRequest', type: 'string', rules: { maxLength: 1 }, description: 'Release account request flag, length: 1' }),
+        newField({ name: 'ourRef', type: 'string', rules: { maxLength: 20 }, description: 'Reference number, length: 20' }),
+        newField({ name: 'remarks', type: 'string', rules: { maxLength: 120 }, description: 'Remarks, length: 120' }),
+        newField({ name: 'agentCode', type: 'string', required: true, rules: { minLength: 1, maxLength: 15 }, description: 'Agent code, length: 15 (Required)' }),
+      ],
+    }),
+  }),
+  P({
+    id: 'sofInfo', name: 'Source of funds block (sofInfo)', group: 'Blocks', fieldName: 'sofInfo',
+    description: 'Standard debit account / amount / currency block (sofInfo).',
+    valid: [{ accountNo: '1234567890', accountType: 'CDA', amount: '150000.00', currency: 'IDR' }],
+    invalid: [{}, { accountNo: 'ABC', accountType: 'CDA', amount: '150000.00', currency: 'IDR' }],
+    build: () => ({
+      type: 'object',
+      description: 'Source of funds info',
+      rules: {},
+      children: [
+        newField({ name: 'accountNo', type: 'string', required: true, rules: { pattern: numericPattern(19), minLength: 1, maxLength: 19 }, description: '(Numeric Only) Account Number, length: 19 (Required)' }),
+        newField({ name: 'accountType', type: 'string', required: true, rules: { enum: ['CDA', 'SDA'], minLength: 1, maxLength: 3 }, description: "Account Type. Valid values: 'CDA', 'SDA', length: 3 (Required)" }),
+        newField({ name: 'amount', type: 'string', required: true, rules: { pattern: PATTERNS.amount, minLength: 1, maxLength: 18 }, description: 'Debit Amount, up to 2 decimal places, length: 18 (Required)' }),
+        newField({ name: 'currency', type: 'string', required: true, rules: { pattern: '^[A-Z]{3}$', minLength: 3, maxLength: 3 }, description: 'ISO currency code, length: 3 (Required)' }),
+      ],
+    }),
+  }),
 ];
 
 export interface CustomPreset {

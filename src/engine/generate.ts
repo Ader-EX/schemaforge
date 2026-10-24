@@ -24,12 +24,12 @@ const isNullable = (n: any) => types(n).includes('null');
 function rx(pattern: string): RegExp | null {
   try { return new RegExp(pattern); } catch { return null; }
 }
-function randStr(pattern: string, ok: (s: string) => boolean, tries = 200): string | null {
+function randStr(pattern: string, ok: (s: string) => boolean, tries = 200, maxRep = 8): string | null {
   const r = rx(pattern);
   if (!r) return null;
   let g: RandExp;
   try { g = new RandExp(pattern); } catch { return null; }
-  g.max = 10;
+  g.max = maxRep;
   for (let i = 0; i < tries; i++) {
     const s = g.gen();
     if (r.test(s) && ok(s)) return s;
@@ -51,11 +51,12 @@ export function genString(n: any, mode: 'valid' | 'min' | 'max' | 'minus' | 'plu
   const target = mode === 'min' ? minL : mode === 'max' ? (isFinite(maxL) ? maxL : 20) : mode === 'minus' ? minL - 1 : mode === 'plus' ? maxL + 1 : Math.max(1, minL);
   const wantLen = mode === 'valid' ? undefined : target;
   if (typeof n.pattern === 'string') {
+    const rep = isFinite(maxL) ? Math.max(1, Math.min(6, Math.floor(maxL / 3))) : 8;
     // prefer exact length when asked, else any valid one (non-empty preferred)
     const s: string | null | false =
-      (wantLen !== undefined && randStr(n.pattern, (x) => x.length === wantLen, 400)) ||
-      (mode === 'valid' && (randStr(n.pattern, (x) => x.length > 0 && inLen(n)(x)) ?? randStr(n.pattern, inLen(n)))) ||
-      (mode !== 'valid' ? randStr(n.pattern, () => true, 50) : null);
+      (wantLen !== undefined && randStr(n.pattern, (x) => x.length === wantLen, 400, rep)) ||
+      (mode === 'valid' && (randStr(n.pattern, (x) => x.length > 0 && inLen(n)(x), 200, rep) ?? randStr(n.pattern, inLen(n), 200, 1))) ||
+      (mode !== 'valid' ? randStr(n.pattern, () => true, 50, rep) : null);
     if (typeof s === 'string') return s;
   }
   if (n.format === 'email') return 'user@example.com';
@@ -164,7 +165,10 @@ export function genCases(schema: any, seedBase?: any): GenCase[] {
         add({ group: 'invalid', label: `${name}: length ${n.minLength - 1} (minLength - 1)`, expect: 'fail', expectedPath: path, keywords: ['minLength', 'pattern', 'enum'], mutate: (p) => setAt(p, ptr, genString(n, 'minus').slice(0, n.minLength - 1)) });
         add({ group: 'boundary', label: `${name}: exactly minLength (${n.minLength})`, expect: 'pass', mutate: (p) => setAt(p, ptr, genString(n, 'min')) });
       }
-      if (!(typeof n.minLength === 'number' && n.minLength - 1 === 0))
+      const emptyAllowedByEnum = Array.isArray(n.enum) && n.enum.includes('');
+      const emptyAllowedByPattern = typeof n.pattern === 'string' && (rx(n.pattern)?.test('') ?? false);
+      const hasConstraintAgainstEmpty = (typeof n.minLength === 'number' && n.minLength >= 1) || (typeof n.pattern === 'string' && !emptyAllowedByPattern) || (Array.isArray(n.enum) && !emptyAllowedByEnum);
+      if (hasConstraintAgainstEmpty && !(typeof n.minLength === 'number' && n.minLength - 1 === 0))
         add({ group: 'invalid', label: `${name}: empty string`, expect: 'fail', expectedPath: path, keywords: ['minLength', 'pattern', 'enum'], mutate: (p) => setAt(p, ptr, '') });
       if (typeof n.pattern === 'string') {
         const r = rx(n.pattern);
