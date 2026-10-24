@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { join } from 'node:path';
 import { decodeBytes } from '../src/model/decode';
 import { parseLength, parseSpecDocument, rowsToTree } from '../src/model/specTable';
 import { fieldToSchema } from '../src/model/toSchema';
@@ -71,5 +72,26 @@ describe('real spec files', () => {
     expect(gw.spec.length).toBe(6);
     expect(gw.schema.required).toEqual(['channelCode', 'referenceNo', 'custPermId', 'mobilePhone', 'accountInfo']);
     expect(gw.schema.properties.accountInfo.required).toEqual(['accountNo', 'accountType']);
+  });
+  it.skipIf(!existsSync('../idms'))('All 15 IDMS service folders have CHECKED.flag and valid Draft-04 schemas with 0 lint errors and 0 generator mismatches', () => {
+    const idmsDir = '../idms';
+    const folders = readdirSync(idmsDir).filter((f) => statSync(join(idmsDir, f)).isDirectory());
+    expect(folders.length).toBe(15);
+    for (const folder of folders) {
+      const fp = join(idmsDir, folder);
+      expect(existsSync(join(fp, 'CHECKED.flag')), `${folder}/CHECKED.flag`).toBe(true);
+      const schemas = readdirSync(fp).filter((f) => f.endsWith('.schema.json'));
+      expect(schemas.length, `${folder} schema count`).toBeGreaterThanOrEqual(1);
+      for (const sf of schemas) {
+        const schema = JSON.parse(readFileSync(join(fp, sf), 'utf8'));
+        expect(schema.$schema).toBe('http://json-schema.org/draft-04/schema#');
+        const errors = lintSchema(schema).filter((i) => i.severity === 'error');
+        expect(errors, `${folder}/${sf} lint errors`).toEqual([]);
+        const sample = genValid(schema, { optional: true });
+        expect(validatePayload(schema, sample).valid, `${folder}/${sf} valid sample`).toBe(true);
+        const mismatches = genCases(schema).filter((c) => c.status === 'mismatch');
+        expect(mismatches, `${folder}/${sf} mismatches`).toEqual([]);
+      }
+    }
   });
 });

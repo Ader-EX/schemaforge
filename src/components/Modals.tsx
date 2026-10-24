@@ -3,11 +3,28 @@ import { CodeEditor, copy, download, Modal, readFile } from './common';
 import { useActive, useStore } from '../store';
 import { useSchema } from '../hooks';
 import { BUILTIN_PRESETS, customToPreset } from '../model/presets';
+import { LINT_GLOSSARY } from '../lint/glossary';
 
 export function HowToModal() {
   const { setUI, createProject } = useStore();
   const active = useActive();
-  const [tab, setTab] = useState<'quickstart' | 'esb' | 'builder' | 'testing' | 'agents'>('quickstart');
+  const [tab, setTab] = useState<'quickstart' | 'esb' | 'builder' | 'testing' | 'glossary' | 'agents'>('quickstart');
+  const [lintQuery, setLintQuery] = useState('');
+  const [lintSev, setLintSev] = useState<'all' | 'error' | 'warning' | 'info'>('all');
+
+  const filteredGlossary = useMemo(() => {
+    const q = lintQuery.trim().toLowerCase();
+    return LINT_GLOSSARY.filter((g) => {
+      if (lintSev !== 'all' && g.severity !== lintSev) return false;
+      if (!q) return true;
+      return (
+        g.code.toLowerCase().includes(q) ||
+        g.title.toLowerCase().includes(q) ||
+        g.when.toLowerCase().includes(q) ||
+        g.whyItMatters.toLowerCase().includes(q)
+      );
+    });
+  }, [lintQuery, lintSev]);
 
   const jumpTo = (leftTab?: 'visual' | 'sample' | 'spec', rightTab?: 'lint' | 'test' | 'gen') => {
     if (!active) createProject('New Service Schema');
@@ -23,6 +40,7 @@ export function HowToModal() {
     ['esb', '📊 ESB & IDMS Excel/CSV'],
     ['builder', '🛠 Builder & Draft-04 Rules'],
     ['testing', '🧪 Lint, Test & Generator'],
+    ['glossary', '📚 Lint Glossary'],
     ['agents', '🤖 AI Agent & IDMS Workflow'],
   ] as const;
 
@@ -343,6 +361,78 @@ export function HowToModal() {
                 <li><b>Mismatch Detection:</b> Every negative case is immediately run through <code>ajv-draft-04</code>. If a negative case unexpectedly passes, it is highlighted with a red <b>⚠ MISMATCH</b> badge so you know your schema rule is too loose.</li>
                 <li><b>Postman & cURL Export:</b> Click <b>Export Postman</b> to download a Postman v2.1 collection containing the valid request + every negative test case with pre-written status code assertions (HTTP 200 vs 400).</li>
               </ul>
+            </div>
+          </div>
+        )}
+
+        {tab === 'glossary' && (
+          <div className="space-y-3 text-xs">
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                className="input flex-1 text-xs"
+                placeholder="Search lint rule code, keyword, or explanation (e.g. desc-enum, nullable, empty-required)..."
+                value={lintQuery}
+                onChange={(e) => setLintQuery(e.target.value)}
+              />
+              <div className="flex items-center gap-1">
+                {([
+                  ['all', `All (${LINT_GLOSSARY.length})`],
+                  ['error', `⛔ Errors (${LINT_GLOSSARY.filter((x) => x.severity === 'error').length})`],
+                  ['warning', `⚠️ Warnings (${LINT_GLOSSARY.filter((x) => x.severity === 'warning').length})`],
+                  ['info', `ℹ️ Info (${LINT_GLOSSARY.filter((x) => x.severity === 'info').length})`],
+                ] as const).map(([k, label]) => (
+                  <button
+                    key={k}
+                    className={`btn ${lintSev === k ? 'btn-primary' : ''}`}
+                    onClick={() => setLintSev(k)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid gap-2.5 md:grid-cols-2">
+              {filteredGlossary.map((g) => {
+                const badge =
+                  g.severity === 'error'
+                    ? 'border-red-300 bg-red-50/70 dark:border-red-800 dark:bg-red-950/30'
+                    : g.severity === 'warning'
+                    ? 'border-amber-300 bg-amber-50/70 dark:border-amber-800 dark:bg-amber-950/25'
+                    : 'border-sky-300 bg-sky-50/70 dark:border-sky-800 dark:bg-sky-950/25';
+                const icon = g.severity === 'error' ? '⛔' : g.severity === 'warning' ? '⚠️' : 'ℹ️';
+                return (
+                  <div key={g.code} className={`rounded-lg border p-3 ${badge}`}>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span>{icon}</span>
+                      <code className="rounded bg-black/10 px-1.5 py-0.5 font-mono text-[11px] font-bold dark:bg-white/10">
+                        {g.code}
+                      </code>
+                      <span className="font-semibold">{g.title}</span>
+                      <span className="chip ml-auto uppercase">{g.severity}</span>
+                    </div>
+                    <div className="mt-2 space-y-1 text-[11px]">
+                      <div><b>When it triggers:</b> {g.when}</div>
+                      <div><b>Why it matters:</b> {g.whyItMatters}</div>
+                      <div><b>One-Click Fix:</b> {g.autoFix}</div>
+                      {(g.exampleBad || g.exampleGood) && (
+                        <div className="mt-1.5 grid gap-1 font-mono text-[10px]">
+                          {g.exampleBad && (
+                            <div className="rounded bg-red-100/80 px-2 py-1 text-red-900 dark:bg-red-950/60 dark:text-red-200">
+                              ✗ Bad: {g.exampleBad}
+                            </div>
+                          )}
+                          {g.exampleGood && (
+                            <div className="rounded bg-green-100/80 px-2 py-1 text-green-900 dark:bg-green-950/60 dark:text-green-200">
+                              ✓ Good: {g.exampleGood}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}

@@ -64,11 +64,31 @@ If external hosting (Vercel/Netlify) is blocked on your corporate network:
 * **Custom Presets**: Save any configured field (including nested objects) as a reusable preset (`☆`) and import/export your preset library as JSON.
 * **Built-in Templates**: Ships with `AcctBindingInq` and `CASATransactionHistoryRequest`.
 
-### 4. Real-Time Draft-04 Linter (with One-Click Fixes)
-Runs on every schema change and flags:
-* **Errors**: Unsupported Draft-04 keywords (`nullable`, `const`, `examples`, `$id`, `$defs`, `if/then/else`, `contains`, `propertyNames`), non-boolean `exclusiveMinimum`/`exclusiveMaximum`, `required` property missing from `properties`, invalid ECMA-262 regex, `minLength > maxLength`, `minimum > maximum`.
-* **Warnings**: Description mentions allowed values (`Valid values: CDA, SDA`, `Y/N`) without `enum` (one-click extract), description mentions `(Required)`/`Mandatory` vs `required` mismatch, description length vs `maxLength` mismatch, redundant/conflicting regex length quantifiers, unanchored regex (missing `^`/`$`), calendar date regex caveat, numeric string vs integer reminder, empty string `""` passing on required string without `minLength`, missing `additionalProperties`.
-* **Info**: Nullable field with `pattern`, object without `required` array.
+### 4. Real-Time Draft-04 Linter (with One-Click Fixes & Built-in Glossary)
+Runs on every schema change. Click **`📖 Glossary`** inside the Lint panel (or the **`📚 Lint Glossary`** tab in `📖 How-To`), or click any rule code (`desc-enum ⓘ`) on a finding to view its explanation and bad/good examples:
+
+| Code | Severity | Meaning & One-Click Fix |
+|---|---|---|
+| `missing-$schema` | ⛔ Error | Missing `"$schema"` at root → Fix adds `"http://json-schema.org/draft-04/schema#"`. |
+| `wrong-$schema` | ⛔ Error | `"$schema"` is Draft-07/2020-12 → Fix sets Draft-04 URI. |
+| `unsupported-keyword` | ⛔ Error | Draft-06+/OpenAPI keyword (`nullable`, `const`, `$id`, `$defs`, `examples`, `if/then/else`, etc.) → Fix converts to Draft-04 (`type: [t, "null"]`, `enum: [v]`, `id`, `definitions`) or removes. |
+| `numeric-exclusive` | ⛔ Error | `exclusiveMinimum` / `exclusiveMaximum` is a number → Fix converts to boolean + `minimum`/`maximum`. |
+| `required-undefined` | ⛔ Error | Property listed in `required` is missing from `properties` → Fix removes from `required`. |
+| `invalid-regex` | ⛔ Error | `pattern` fails `new RegExp(pattern)`. |
+| `non-ecma-regex` | ⛔ Error / ⚠️ Warn | Uses PCRE/Java constructs (`(?i)`, `(?>...)`, `++`, `\A`, `\Z`, `[[:alpha:]]`) or ES2018+ lookbehinds `(?<=...)`. |
+| `range-conflict` | ⛔ Error | `minLength > maxLength`, `minimum > maximum`, `minItems > maxItems`, or negative bound → Fix swaps or resets to `0`. |
+| `unanchored-pattern` | ⚠️ Warning | `pattern` is missing `^` or `$` (matches substrings) → Fix anchors all top-level `\|` branches with `^...$`. |
+| `empty-required` | ⚠️ Warning | Required `string` has no `minLength >= 1`, `enum`, or non-empty `pattern` (`""` passes!) → Fix sets `minLength: 1`. |
+| `desc-enum` | ⚠️ Warning | `description` mentions allowed values (`Valid values: CDA, SDA`, `Y/N`) without `enum` → Fix extracts `enum` (plus `null` if nullable). |
+| `desc-required` | ⚠️ Warning | `description` says `(Required)`/`Mandatory` or `Optional` contradicting `required` → Fix syncs `required`. |
+| `desc-length` | ⚠️ Warning | `description` states a length (`length: 19`) that disagrees with `maxLength`/`minLength` → Fix syncs length. |
+| `pattern-length` | ⚠️ Warning | `minLength`/`maxLength` duplicates or conflicts with regex quantifier `{m,n}` → Fix removes duplicate or syncs bound. |
+| `numeric-string` | ⚠️ Warning | `description` mentions "numeric/digits only" on unrestricted string (Fix adds `^[0-9]+$`) or warns when typed `integer` (rejects quoted `"00123"`). |
+| `date-pattern` | ⚠️ Warning | `YYYY-MM-DD` regex cannot reject impossible calendar dates like `2026-02-31` (validate in backend). |
+| `ignored-keyword` | ⚠️ Warning | Type-mismatched keyword (`maxLength` on `integer`, `maximum` on `string`) is silently ignored → Fix removes keyword. |
+| `no-additionalProperties` | ⚠️ Warn / ℹ️ Info | Object has no `additionalProperties` (unknown fields accepted) → Fix sets `additionalProperties: false`. |
+| `nullable-pattern` | ℹ️ Info | Nullable string has a `pattern` (`pattern` applies to strings only, so `null` passes as intended). |
+| `no-required` | ℹ️ Info | Object has `properties` but no `required` array (all child properties are optional). |
 
 ### 5. Live Test Payload & Regression Suite (`ajv-draft-04`)
 * Real Draft-04 validation (`allErrors: true`, `unicodeRegExp: false`) with plain-English explanations, fix hints, missing-required summary, and click-to-jump line highlighting.
